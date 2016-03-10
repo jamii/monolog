@@ -18,16 +18,16 @@
      [:meta {:charset "utf-8"}]
      [:meta {:name "viewport"
              :content "width=device-width, initial-scale=1"}]
-     (include-css (if (env :dev) "/css/site.css" "/css/site.min.css"))]
-    [:body
-     mount-target
-     (include-js "/js/app.js")]))
+     (include-css "http://yegor256.github.io/tacit/tacit.min.css")]
+   [:body
+    mount-target
+    (include-js "/js/app.js")]))
 
 
 (defroutes routes
   (GET "/" [] loading-page)
   (GET "/about" [] loading-page)
-  
+
   (resources "/")
   (not-found "Not Found"))
 

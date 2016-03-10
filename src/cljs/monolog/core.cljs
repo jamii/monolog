@@ -24,7 +24,8 @@
   (fn []
     [:form {:on-submit (fn [e]
                          (.preventDefault e)
-                         (log! {:username "jamii" :contents @contents}))}
+                         (log! {:username "jamii" :contents @contents})
+                         (reset! contents ""))}
       [:input {:type "text"
                :value @contents
                :on-change (fn [e]
