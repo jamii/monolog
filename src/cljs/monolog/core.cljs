@@ -8,28 +8,40 @@
 
 (defn log! [entry] (swap! log conj entry))
 
-(defn text-input [value]
-  [:input {:type "text"
-           :value @value
-           :on-change #(reset! value (-> % .-target .-value))}])
+(def bots [
+  (fn [log]
+    (into {}
+      (for [[message ix] (map vector log (range))
+            :when (re-find #"#todo" (:contents message))
+            :when (not (some #(re-find (re-pattern (str "#done " ix)) (:contents %)) log))]
+            [ix [:button {:on-click (fn [event]
+                                      (.preventDefault event)
+                                      (log! {:username "todo" :contents (str "#done " ix)}))}
+                 "✓"]])))
+])
 
 (defn messages []
+  (let [reactions (doall (for [bot bots] (bot @log)))]
+
   [:div#messages
-   (for [[message index] (map vector @log (range))]
-    ^{:key (str "message-" index)}
-    [:div [:span.username (:username message) ": "] [:span.message (:contents message)]])])
+   (for [[message ix] (map vector @log (range))]
+     (let [reaction (into [:span] (for [reaction reactions
+                                   :when (reaction ix)]
+                                   (reaction ix)))]
+    ^{:key (str "message-" ix)}
+    [:div [:span ix " "] [:span (:contents message)] reaction]))]))
 
 (defn console []
   (let [contents (reagent/atom "")]
-  (fn []
-    [:form {:on-submit (fn [e]
-                         (.preventDefault e)
-                         (log! {:username "jamii" :contents @contents})
-                         (reset! contents ""))}
-      [:input {:type "text"
-               :value @contents
-               :on-change (fn [e]
-                            (reset! contents (-> e .-target .-value)))}]])))
+    (fn []
+      [:form {:on-submit (fn [event]
+                           (.preventDefault event)
+                           (log! {:username "jamii" :contents @contents})
+                           (reset! contents ""))}
+        [:input {:type "text"
+         :value @contents
+         :on-change (fn [event]
+           (reset! contents (-> event .-target .-value)))}]])))
 
 (defn page []
   [:div
