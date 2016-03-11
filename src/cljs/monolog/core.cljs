@@ -1,5 +1,6 @@
 (ns monolog.core
   (:require [reagent.core :as reagent :refer [atom]]
+            [reagent.ratom :refer [make-reaction]]
             [alandipert.storage-atom :refer [local-storage]]
             [reagent.session :as session]
             [secretary.core :as secretary :include-macros true]
@@ -9,13 +10,21 @@
             [cljs-time.core :as time]
             cljs-time.format))
 
+(defn date-time->str [date-time]
+  (cljs-time.format/unparse (cljs-time.format/formatter "YYYY-MM-dd HH:mm:ss") date-time))
+
+(defn str->date-time [str]
+  (cljs-time.format/parse (cljs-time.format/formatter "YYYY-MM-dd HH:mm:ss") str))
+
 (def log (local-storage (atom []) :log))
 
 ; (defonce log (atom []))
 
-(defn log! [entry] (swap! log conj entry))
+(defn log! [entry] (swap! log conj (assoc entry
+                                          :ix (count @log)
+                                          :date-time (date-time->str (time/now)))))
 
-(defonce current-filter (atom :all))
+(defonce current-view (atom :all))
 
 (defonce console-contents (atom ""))
 
@@ -27,73 +36,61 @@
          :context    :expr}
         (fn [result] result)))
 
-(defn date-time->str [date-time]
-  (cljs-time.format/unparse (cljs-time.format/formatter "YYYY-MM-dd HH:mm:ss") date-time))
+(def views
+  (make-reaction
+   (fn []
+     {:all (into [] (for [message @log]
+                      message))
+      :todo (into [] (for [message @log]
+                       (when (re-find #"/todo" (:contents message))
+                         (when-not (some #(re-find (re-pattern (str "/done " (:ix message))) (:contents %)) @log)
+                           (assoc message :reaction
+                                  [:button {:on-click (fn [event]
+                                                        (.preventDefault event)
+                                                        (log! {:username "todo" :contents (str "/done " (:ix message))}))}
+                                   "✓"])))))
+      :eval (into [] (for [message @log]
+                       (when (re-find #"/eval" (:contents message))
+                         (let [code-str (.replace (:contents message) "/eval", "")]
+                           (assoc message :reaction
+                                  (try
+                                    (let [code (read-string code-str)
+                                          result (eval-code code)]
+                                      (if (:error result)
+                                        [:space " ! " (.-message (.-cause (:error result)))]
+                                        [:span " => " (:value result)]))
+                                    (catch js/Object error
+                                      [:span " ! " (.-message error)])))))))
+      })))
 
-(defn str->date-time [str]
-  (cljs-time.format/parse (cljs-time.format/formatter "YYYY-MM-dd HH:mm:ss") str))
+(def prefixes
+  {:all ""
+   :todo "/todo "
+   :eval "/eval "})
 
-(def filters
-  {:all {:ixes (fn [log]
-                 (for [[message ix] (map vector log (range))]
-                   ix))
-         :prefix ""}
-   :todo {:ixes (fn [log]
-                  (for [[message ix] (map vector log (range))
-                        :when (re-find #"/todo" (:contents message))
-                        :when (not (some #(re-find (re-pattern (str "/done " ix)) (:contents %)) log))]
-                    ix))
-          :prefix "/todo "}
-   :eval {:ixes (fn [log]
-                  (for [[message ix] (map vector log (range))
-                        :when (re-find #"/eval" (:contents message))]
-                    ix))
-          :prefix "/eval "}})
-
-(defn reactions [log]
-  (into {}
-        (concat
-         (for [ix ((get-in filters [:todo :ixes]) log)]
-           [ix [:button {:on-click (fn [event]
-                                     (.preventDefault event)
-                                     (log! {:username "todo" :contents (str "/done " ix)}))}
-                "✓"]])
-         (for [ix ((get-in filters [:eval :ixes]) log)]
-           (let [code-str (.replace (:contents (log ix)) "/repl", "")]
-             (try
-               (let [code (read-string code-str)
-                     result (eval-code code)]
-                 (if (:error result)
-                   [ix [:space " ! " (.-message (.-cause (:error result)))]]
-                   [ix [:span " => " (:value result)]]))
-               (catch js/Object error
-                 [ix [:span " ! " (.-message error)]])))))))
-
-(defn filter-chooser []
-  (into [:div] (for [filter (keys filters)]
-                 ^{:key (str "filter-" filter)}
-                 [:button {:style {:text-decoration (if (= filter @current-filter) "underline" "none")}
+(defn view-chooser []
+  (into [:div] (for [view (keys @views)]
+                 ^{:key (str "view-" view)}
+                 [:button {:style {:text-decoration (if (= view @current-view) "underline" "none")}
                            :on-click (fn [event]
-                                       (reset! current-filter filter)
-                                       (reset! console-contents (get-in filters [filter :prefix])))}
-                  (name filter) " "])))
+                                       (reset! current-view view)
+                                       (reset! console-contents (prefixes view)))}
+                  (name view) " "])))
 
 (defn messages []
-  (let [reactions (reactions @log)
-        ixes ((get-in filters [@current-filter :ixes]) @log)]
-    (into [:div {:style {:overflow-y "scroll"
-                         :height "200px"}}]
-          (for [ix ixes]
-            (let [message (@log ix)]
-              ^{:key (str "message-" ix)}
-              [:div
-               [:span "#" ix " "]
-               [:span (:date-time message) " | "]
-               [:span (:contents message)]
-               (reactions ix)])))))
+  (into [:div {:style {:overflow-y "scroll"
+                       :height "200px"}}]
+        (for [message (@views @current-view)]
+          ^{:key (str "message-" (:ix message))}
+          (when message
+            [:div
+             [:span "#" (:ix message) " "]
+             [:span (:date-time message) " | "]
+             [:span (:contents message)]
+             (:reaction message)]))))
 
 (defn console []
-  (let [prefix (get-in filters [@current-filter :prefix])]
+  (let [prefix (prefixes @current-view)]
     (when-not (.startsWith @console-contents prefix)
       (reset! console-contents prefix))
     [:textarea {:rows 1
@@ -104,7 +101,6 @@
                                (do
                                  (.preventDefault event)
                                  (log! {:username "jamii"
-                                        :date-time (date-time->str (time/now))
                                         :contents (-> event .-target .-value)})
                                  (reset! console-contents prefix))))
                 :value @console-contents}]
@@ -117,7 +113,7 @@
 
 (defn page []
   [:div
-   [filter-chooser]
+   [view-chooser]
    [messages]
    [console]
    [debug]])
