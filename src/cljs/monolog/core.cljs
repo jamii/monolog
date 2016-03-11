@@ -15,13 +15,13 @@
 
 (defonce console-contents (atom ""))
 
-(defn eval-str [s]
-(eval (empty-state)
-     (read-string s)
-     {:eval       js-eval
-      :source-map true
-      :context    :expr}
-     (fn [result] result)))
+(defn eval-code [code]
+  (eval (empty-state)
+        code
+        {:eval       js-eval
+         :source-map true
+         :context    :expr}
+        (fn [result] result)))
 
 (def filters
   {:all {:ixes (fn [log]
@@ -43,13 +43,21 @@
 (defn reactions [log]
   (into {}
         (concat
-        (for [ix ((get-in filters [:todo :ixes]) log)]
-          [ix [:button {:on-click (fn [event]
-                                    (.preventDefault event)
-                                    (log! {:username "todo" :contents (str "#done " ix)}))}
-               "✓"]])
-        (for [ix ((get-in filters [:repl :ixes]) log)]
-          [ix [:span " => "(pr-str (:value (eval-str (.replace (:contents (log ix)) "#repl", ""))))]]))))
+         (for [ix ((get-in filters [:todo :ixes]) log)]
+           [ix [:button {:on-click (fn [event]
+                                     (.preventDefault event)
+                                     (log! {:username "todo" :contents (str "#done " ix)}))}
+                "✓"]])
+         (for [ix ((get-in filters [:repl :ixes]) log)]
+           (let [code-str (.replace (:contents (log ix)) "#repl", "")]
+             (try
+               (let [code (read-string code-str)
+                     result (eval-code code)]
+                 (if (:error result)
+                   [ix [:space " ! " (.-message (.-cause (:error result)))]]
+                   [ix [:span " => " (:value result)]]))
+               (catch js/Object error
+                 [ix [:span " ! " (.-message error)]])))))))
 
 (defn filter-chooser []
   (into [:div] (for [filter (keys filters)]
