@@ -21,7 +21,8 @@
                  [venantius/accountant "0.1.7"
                   :exclusions [org.clojure/tools.reader]]
                  [alandipert/storage-atom "1.2.4"]
-                 [org.clojure/tools.reader "1.0.0-alpha3"]]
+                 [org.clojure/tools.reader "1.0.0-alpha3"]
+                 [com.andrewmcveigh/cljs-time "0.4.0"]]
 
   :plugins [[lein-environ "1.0.2"]
             [lein-cljsbuild "1.1.1"]

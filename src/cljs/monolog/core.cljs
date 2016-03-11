@@ -5,9 +5,13 @@
             [secretary.core :as secretary :include-macros true]
             [accountant.core :as accountant]
             [cljs.tools.reader :refer [read-string]]
-            [cljs.js :refer [empty-state eval js-eval]]))
+            [cljs.js :refer [empty-state eval js-eval]]
+            [cljs-time.core :as time]
+            cljs-time.format))
 
 (def log (local-storage (atom []) :log))
+
+; (defonce log (atom []))
 
 (defn log! [entry] (swap! log conj entry))
 
@@ -23,6 +27,12 @@
          :context    :expr}
         (fn [result] result)))
 
+(defn date-time->str [date-time]
+  (cljs-time.format/unparse (cljs-time.format/formatter "YYYY-MM-dd HH:mm:ss") date-time))
+
+(defn str->date-time [str]
+  (cljs-time.format/parse (cljs-time.format/formatter "YYYY-MM-dd HH:mm:ss") str))
+
 (def filters
   {:all {:ixes (fn [log]
                  (for [[message ix] (map vector log (range))]
@@ -30,15 +40,15 @@
          :prefix ""}
    :todo {:ixes (fn [log]
                   (for [[message ix] (map vector log (range))
-                        :when (re-find #"#todo" (:contents message))
-                        :when (not (some #(re-find (re-pattern (str "#done " ix)) (:contents %)) log))]
+                        :when (re-find #"/todo" (:contents message))
+                        :when (not (some #(re-find (re-pattern (str "/done " ix)) (:contents %)) log))]
                     ix))
-          :prefix "#todo "}
-   :repl {:ixes (fn [log]
+          :prefix "/todo "}
+   :eval {:ixes (fn [log]
                   (for [[message ix] (map vector log (range))
-                        :when (re-find #"#repl" (:contents message))]
+                        :when (re-find #"/eval" (:contents message))]
                     ix))
-          :prefix "#repl "}})
+          :prefix "/eval "}})
 
 (defn reactions [log]
   (into {}
@@ -46,10 +56,10 @@
          (for [ix ((get-in filters [:todo :ixes]) log)]
            [ix [:button {:on-click (fn [event]
                                      (.preventDefault event)
-                                     (log! {:username "todo" :contents (str "#done " ix)}))}
+                                     (log! {:username "todo" :contents (str "/done " ix)}))}
                 "✓"]])
-         (for [ix ((get-in filters [:repl :ixes]) log)]
-           (let [code-str (.replace (:contents (log ix)) "#repl", "")]
+         (for [ix ((get-in filters [:eval :ixes]) log)]
+           (let [code-str (.replace (:contents (log ix)) "/repl", "")]
              (try
                (let [code (read-string code-str)
                      result (eval-code code)]
@@ -76,7 +86,11 @@
           (for [ix ixes]
             (let [message (@log ix)]
               ^{:key (str "message-" ix)}
-              [:div [:span ix " "] [:span (:contents message)] (reactions ix)])))))
+              [:div
+               [:span "#" ix " "]
+               [:span (:date-time message) " | "]
+               [:span (:contents message)]
+               (reactions ix)])))))
 
 (defn console []
   (let [prefix (get-in filters [@current-filter :prefix])]
@@ -89,7 +103,9 @@
                              (when (and (== (.-keyCode event) 13) (not (.-shiftKey event)))
                                (do
                                  (.preventDefault event)
-                                 (log! {:username "jamii" :contents (-> event .-target .-value)})
+                                 (log! {:username "jamii"
+                                        :date-time (date-time->str (time/now))
+                                        :contents (-> event .-target .-value)})
                                  (reset! console-contents prefix))))
                 :value @console-contents}]
     ))
