@@ -24,6 +24,8 @@
 
 (defonce console-contents (atom ""))
 
+(defonce editing (atom nil))
+
 (defn eval-code [code]
   (eval (empty-state)
         code
@@ -32,11 +34,48 @@
          :context    :expr}
         (fn [result] result)))
 
+(defn editable-messsage-ui-inner [message]
+  (let [original-message message]
+    (fn [message]
+      [:input {:type "text"
+               :style {:flex "1"
+                       :margin-left "5px"
+                       :margin-right "5px"
+                       :margin-bottom "0px"
+                       :padding "0"}
+               :value (:contents message)
+               :on-change (fn [event]
+                            (swap! log assoc-in [(:ix message) :contents] (-> event .-target .-value)))
+               :on-key-down (fn [event]
+                              (when (and (== (.-keyCode event) 13) (not (.-shiftKey event)))
+                                (do
+                                  (.preventDefault event)
+                                  (reset! editing nil)))
+                              (when (== (.-keyCode event) 27)
+                                (do
+                                  (.preventDefault event)
+                                  (reset! editing nil)
+                                  (swap! log assoc-in [(:ix message) :contents] (:contents original-message)))))
+               :on-blur (fn [event]
+                          (when (and (== (.-keyCode event) 13) (not (.-shiftKey event)))
+                            (do
+                              (.preventDefault event)
+                              (reset! editing nil))))}])))
+
+(def editable-message-ui
+  (with-meta editable-messsage-ui-inner
+    {:component-did-mount #(.select (r/dom-node %))}))
+
 (defn message-ui-inner [message]
   ^{:key (str "message-" (:ix message))}
   [:div {:style {:width "100%"
                  :display "flex"}}
-   [:span {:style {:flex "1" :margin-left "5px" :margin-right "5px"}} (:contents message)]
+   (if (= @editing (:ix message))
+     [editable-message-ui message]
+     [:span {:style {:flex "1" :margin-left "5px" :margin-right "5px"}
+             :on-mouse-down (fn [event]
+                              (reset! editing (:ix message)))}
+      (:contents message)])
    [:span {:style {:margin-left "5px" :margin-right "5px"}} (:reaction message)]
    [:span {:style {:margin-left "5px" :margin-right "5px"}} "#" (:ix message)]
    [:span {:style {:margin-left "5px" :margin-right "5px"}} (:date-time message)]])
@@ -56,12 +95,13 @@
   [:textarea {:rows 1
               :on-change (fn [event]
                            (reset! console-contents (-> event .-target .-value)))
-              :on-key-up (fn [event]
+              :on-key-down (fn [event]
                            (when (and (== (.-keyCode event) 13) (not (.-shiftKey event)))
                              (do
                                (.preventDefault event)
                                (log! {:username "jamii"
-                                      :contents (-> event .-target .-value)}))))
+                                      :contents (-> event .-target .-value)})
+                               (reset! console-contents ""))))
               :value @console-contents}])
 
 (defn debug-ui []
