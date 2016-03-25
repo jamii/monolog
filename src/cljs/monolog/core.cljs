@@ -22,6 +22,9 @@
                                           :ix (count @log)
                                           :date-time (date-time->str (time/now)))))
 
+(def now (atom (time/now)))
+(defonce always-now (js/setInterval #(reset! now (time/now)) (* 60 1000)))
+
 (defonce console-contents (atom ""))
 
 (defonce editing (atom nil))
@@ -116,12 +119,27 @@
    [:h "Debug"]
    [:button {:on-click #(reset! log [])} "clear log!"]])
 
+(defn notifications-ui []
+  (let [last-log (or (first (for [message (reverse @log)
+                                  :when (.contains (:contents message) "#log")]
+                              (str->date-time (:date-time message))))
+                     @now)
+        minutes-since-last-log (if (time/after? @now last-log) ; interval blows up if endpoints are equal :(
+                                 (time/in-minutes (time/interval last-log @now))
+                                 0)]
+    [:div
+     (when (> minutes-since-last-log 0)
+       [:span "Last #log was " minutes-since-last-log " minutes ago! What are you up to?"])]))
+
 (defn page-ui []
   [:div {:style {:height "100vh"
                  :width "100vw"
                  :display "flex"
                  :flex-direction "column"
                  :padding "36px"}}
+   [notifications-ui]
+   [:hr {:style {:margin-top "10px"
+                 :margin-bottom "10px"}}]
    [messages-ui]
    [console-ui]
    [debug-ui]])
