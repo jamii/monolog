@@ -121,18 +121,20 @@
    [:h "Debug"]
    [:button {:on-click #(reset! log [])} "clear log!"]])
 
-(defn notification-ui-inner [text template]
-  [:span {:on-click #(do
-                       (reset! console-contents template)
-                       (.select (js/document.getElementById "console")))}
-   text])
+(defn nudge [template]
+  (reset! console-contents template)
+  (.select (js/document.getElementById "console")))
 
-(def notification-ui
-  (with-meta notification-ui-inner
-    {:component-did-mount #(let [[_ text] (-> % .-props .-argv)]
-                             (new js/Notification text))}))
+(defn nudge-ui-inner [text template]
+  [:span {:on-click #(nudge template)} text])
 
-(defn notifications-ui []
+(def nudge-ui
+  (with-meta nudge-ui-inner
+    {:component-did-mount #(let [[_ text template] (-> % .-props .-argv)
+                                 notification (new js/Notification text)]
+                             (set! (.-onclick notification) (fn [] (nudge template))))}))
+
+(defn nudges-ui []
   (let [last-log (or (first (for [message (reverse @log)
                                   :when (.contains (:contents message) "#log")]
                               (str->date-time (:date-time message))))
@@ -142,7 +144,7 @@
                                  0)]
     [:div
      (when (> minutes-since-last-log 0)
-       [notification-ui (str "Last #log was " minutes-since-last-log " minutes ago! What are you up to?") "#log "])]))
+       [nudge-ui (str "Last #log was " minutes-since-last-log " minutes ago! What are you up to?") "#log "])]))
 
 (defn page-ui []
   [:div {:style {:height "100vh"
@@ -150,7 +152,7 @@
                  :display "flex"
                  :flex-direction "column"
                  :padding "36px"}}
-   [notifications-ui]
+   [nudges-ui]
    [:hr {:style {:margin-top "10px"
                  :margin-bottom "10px"}}]
    [messages-ui]
