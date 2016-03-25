@@ -104,7 +104,7 @@
           [message-ui message])))
 
 (defn console-ui []
-  [:textarea {:rows 1
+  [:textarea#console {:rows 1
               :on-change (fn [event]
                            (reset! console-contents (-> event .-target .-value)))
               :on-key-down (fn [event]
@@ -121,8 +121,11 @@
    [:h "Debug"]
    [:button {:on-click #(reset! log [])} "clear log!"]])
 
-(defn notification-ui-inner [text]
-  [:span text])
+(defn notification-ui-inner [text template]
+  [:span {:on-click #(do
+                       (reset! console-contents template)
+                       (.select (js/document.getElementById "console")))}
+   text])
 
 (def notification-ui
   (with-meta notification-ui-inner
@@ -139,7 +142,7 @@
                                  0)]
     [:div
      (when (> minutes-since-last-log 0)
-       [notification-ui (str "Last #log was " minutes-since-last-log " minutes ago! What are you up to?")])]))
+       [notification-ui (str "Last #log was " minutes-since-last-log " minutes ago! What are you up to?") "#log "])]))
 
 (defn page-ui []
   [:div {:style {:height "100vh"
