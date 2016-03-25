@@ -25,6 +25,7 @@
 (defonce console-contents (atom ""))
 
 (defonce editing (atom nil))
+(defonce hovering (atom nil))
 
 (defn eval-code [code]
   (eval (empty-state)
@@ -77,7 +78,12 @@
                               (reset! editing (:ix message)))}
       (:contents message)])
    [:span {:style {:margin-left "5px" :margin-right "5px"}} (:reaction message)]
-   [:span {:style {:margin-left "5px" :margin-right "5px"}} "#" (:ix message)]
+   [:span {:style {:margin-left "5px" :margin-right "5px"}
+           :on-mouse-enter #(reset! hovering (:ix message))
+           :on-mouse-leave #(reset! hovering nil)
+           :on-click #(swap! log assoc-in [(:ix message) :deleted] true)}
+    (if (= @hovering (:ix message)) "X" "#")
+    (:ix message)]
    [:span {:style {:margin-left "5px" :margin-right "5px"}} (:date-time message)]])
 
 (def message-ui
@@ -88,7 +94,8 @@
   (into [:div {:style {:overflow-y "scroll"
                        :flex 1}}]
         (for [message @log
-              :when (:contents message)]
+              :when (:contents message)
+              :when (not (:deleted message))]
           [message-ui message])))
 
 (defn console-ui []
