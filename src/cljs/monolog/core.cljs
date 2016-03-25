@@ -30,6 +30,8 @@
 (defonce editing (atom nil))
 (defonce hovering (atom nil))
 
+(js/Notification.requestPermission)
+
 (defn eval-code [code]
   (eval (empty-state)
         code
@@ -119,17 +121,25 @@
    [:h "Debug"]
    [:button {:on-click #(reset! log [])} "clear log!"]])
 
+(defn notification-ui-inner [text]
+  [:span text])
+
+(def notification-ui
+  (with-meta notification-ui-inner
+    {:component-did-mount #(let [[_ text] (-> % .-props .-argv)]
+                             (new js/Notification text))}))
+
 (defn notifications-ui []
   (let [last-log (or (first (for [message (reverse @log)
                                   :when (.contains (:contents message) "#log")]
                               (str->date-time (:date-time message))))
                      @now)
-        minutes-since-last-log (if (time/after? @now last-log) ; interval blows up if endpoints are equal :(
+        minutes-since-last-log (if (time/after? @now last-log) ; interval blows up if endpoints are equal
                                  (time/in-minutes (time/interval last-log @now))
                                  0)]
     [:div
      (when (> minutes-since-last-log 0)
-       [:span "Last #log was " minutes-since-last-log " minutes ago! What are you up to?"])]))
+       [notification-ui (str "Last #log was " minutes-since-last-log " minutes ago! What are you up to?")])]))
 
 (defn page-ui []
   [:div {:style {:height "100vh"
