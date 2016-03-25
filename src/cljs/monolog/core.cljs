@@ -18,13 +18,9 @@
 
 (def log (local-storage (atom []) :log))
 
-; (defonce log (atom []))
-
 (defn log! [entry] (swap! log conj (assoc entry
                                           :ix (count @log)
                                           :date-time (date-time->str (time/now)))))
-
-(defonce current-view (atom :all))
 
 (defonce console-contents (atom ""))
 
@@ -35,47 +31,6 @@
          :source-map true
          :context    :expr}
         (fn [result] result)))
-
-(def views
-  (make-reaction
-   (fn []
-     {:all (into [] (for [message @log]
-                      message))
-      :todo (into [] (for [message @log]
-                       (when (re-find #"/todo" (:contents message))
-                         (when-not (some #(re-find (re-pattern (str "/done " (:ix message))) (:contents %)) @log)
-                           (assoc message :reaction
-                                  [:button {:on-click (fn [event]
-                                                        (.preventDefault event)
-                                                        (log! {:username "todo" :contents (str "/done " (:ix message))}))}
-                                   "✓"])))))
-      :eval (into [] (for [message @log]
-                       (when (re-find #"/eval" (:contents message))
-                         (let [code-str (.replace (:contents message) "/eval", "")]
-                           (assoc message :reaction
-                                  (try
-                                    (let [code (read-string code-str)
-                                          result (eval-code code)]
-                                      (if (:error result)
-                                        [:space " ! " (.-message (.-cause (:error result)))]
-                                        [:span " => " (:value result)]))
-                                    (catch js/Object error
-                                      [:span " ! " (.-message error)])))))))
-      })))
-
-(def prefixes
-  {:all ""
-   :todo "/todo "
-   :eval "/eval "})
-
-(defn view-chooser-ui []
-  (into [:div] (for [view (keys @views)]
-                 ^{:key (str "view-" view)}
-                 [:button {:style {:text-decoration (if (= view @current-view) "underline" "none")}
-                           :on-click (fn [event]
-                                       (reset! current-view view)
-                                       (reset! console-contents (prefixes view)))}
-                  (name view) " "])))
 
 (defn message-ui-inner [message]
   ^{:key (str "message-" (:ix message))}
@@ -93,26 +48,21 @@
 (defn messages-ui []
   (into [:div {:style {:overflow-y "scroll"
                        :flex 1}}]
-        (for [message (@views @current-view)
-              :when message]
+        (for [message @log
+              :when (:contents message)]
           [message-ui message])))
 
 (defn console-ui []
-  (let [prefix (prefixes @current-view)]
-    (when-not (.startsWith @console-contents prefix)
-      (reset! console-contents prefix))
-    [:textarea {:rows 1
-                :on-change (fn [event]
-                             (reset! console-contents (-> event .-target .-value)))
-                :on-key-up (fn [event]
-                             (when (and (== (.-keyCode event) 13) (not (.-shiftKey event)))
-                               (do
-                                 (.preventDefault event)
-                                 (log! {:username "jamii"
-                                        :contents (-> event .-target .-value)})
-                                 (reset! console-contents prefix))))
-                :value @console-contents}]
-    ))
+  [:textarea {:rows 1
+              :on-change (fn [event]
+                           (reset! console-contents (-> event .-target .-value)))
+              :on-key-up (fn [event]
+                           (when (and (== (.-keyCode event) 13) (not (.-shiftKey event)))
+                             (do
+                               (.preventDefault event)
+                               (log! {:username "jamii"
+                                      :contents (-> event .-target .-value)}))))
+              :value @console-contents}])
 
 (defn debug-ui []
   [:div
@@ -125,7 +75,6 @@
                  :display "flex"
                  :flex-direction "column"
                  :padding "36px"}}
-   [view-chooser-ui]
    [messages-ui]
    [console-ui]
    [debug-ui]])
