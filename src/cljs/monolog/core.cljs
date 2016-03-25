@@ -79,11 +79,12 @@
 
 (defn message-ui-inner [message]
   ^{:key (str "message-" (:ix message))}
-  [:div
-   [:span "#" (:ix message) " "]
-   [:span (:date-time message) " | "]
-   [:span (:contents message)]
-   (:reaction message)])
+  [:div {:style {:width "100%"
+                 :display "flex"}}
+   [:span {:style {:flex "1" :margin-left "5px" :margin-right "5px"}} (:contents message)]
+   [:span {:style {:margin-left "5px" :margin-right "5px"}} (:reaction message)]
+   [:span {:style {:margin-left "5px" :margin-right "5px"}} "#" (:ix message)]
+   [:span {:style {:margin-left "5px" :margin-right "5px"}} (:date-time message)]])
 
 (def message-ui
   (with-meta message-ui-inner
@@ -120,6 +121,7 @@
 
 (defn page-ui []
   [:div {:style {:height "100vh"
+                 :width "100vw"
                  :display "flex"
                  :flex-direction "column"
                  :padding "36px"}}
