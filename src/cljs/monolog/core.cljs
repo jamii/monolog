@@ -1,5 +1,5 @@
 (ns monolog.core
-  (:require [reagent.core :as reagent :refer [atom]]
+  (:require [reagent.core :as r :refer [atom]]
             [reagent.ratom :refer [make-reaction]]
             [alandipert.storage-atom :refer [local-storage]]
             [reagent.session :as session]
@@ -68,7 +68,7 @@
    :todo "/todo "
    :eval "/eval "})
 
-(defn view-chooser []
+(defn view-chooser-ui []
   (into [:div] (for [view (keys @views)]
                  ^{:key (str "view-" view)}
                  [:button {:style {:text-decoration (if (= view @current-view) "underline" "none")}
@@ -77,19 +77,26 @@
                                        (reset! console-contents (prefixes view)))}
                   (name view) " "])))
 
-(defn messages []
+(defn message-ui-inner [message]
+  ^{:key (str "message-" (:ix message))}
+  [:div
+   [:span "#" (:ix message) " "]
+   [:span (:date-time message) " | "]
+   [:span (:contents message)]
+   (:reaction message)])
+
+(def message-ui
+  (with-meta message-ui-inner
+    {:component-did-mount #(.scrollIntoView (r/dom-node %))}))
+
+(defn messages-ui []
   (into [:div {:style {:overflow-y "scroll"
                        :height "200px"}}]
-        (for [message (@views @current-view)]
-          ^{:key (str "message-" (:ix message))}
-          (when message
-            [:div
-             [:span "#" (:ix message) " "]
-             [:span (:date-time message) " | "]
-             [:span (:contents message)]
-             (:reaction message)]))))
+        (for [message (@views @current-view)
+              :when message]
+          [message-ui message])))
 
-(defn console []
+(defn console-ui []
   (let [prefix (prefixes @current-view)]
     (when-not (.startsWith @console-contents prefix)
       (reset! console-contents prefix))
@@ -106,23 +113,23 @@
                 :value @console-contents}]
     ))
 
-(defn debug []
+(defn debug-ui []
   [:div
    [:h "Debug"]
    [:button {:on-click #(reset! log [])} "clear log!"]])
 
-(defn page []
+(defn page-ui []
   [:div
-   [view-chooser]
-   [messages]
-   [console]
-   [debug]])
+   [view-chooser-ui]
+   [messages-ui]
+   [console-ui]
+   [debug-ui]])
 
 (secretary/defroute "/" []
-  (session/put! :current-page #'page))
+  (session/put! :current-page #'page-ui))
 
 (defn mount-root []
-  (reagent/render [page] (.getElementById js/document "app")))
+  (r/render [page-ui] (.getElementById js/document "app")))
 
 (defn init! []
   (accountant/configure-navigation!
