@@ -23,7 +23,7 @@
                                           :date-time (date-time->str (time/now)))))
 
 (def now (atom (time/now)))
-(defonce always-now (js/setInterval #(reset! now (time/now)) (* 60 1000)))
+(defonce always-now (js/setInterval #(reset! now (time/now)) (* 1 1000)))
 
 (defonce console-contents (atom ""))
 
@@ -43,19 +43,32 @@
       (when-not (js/isNaN mins)
         mins))))
 
+(defn task-kind [contents]
+  (cond
+    (.contains contents "#task") :task
+    (.contains contents "#break") :break
+    true nil))
+
 (def tasks
   (make-reaction
    (fn []
      (into [] (for [message @log]
-                (when (.contains (:contents message) "#task")
+                (when-let [kind (task-kind (:contents message))]
                   (let [message-time (str->date-time (:date-time message))
-                        next-message-ix (-> message :ix inc)
-                        next-message-time (if (> next-message-ix (count @log))
-                                            (str->date-time (:date-time (@log next-message-ix)))
+                        next-message (first (for [ix (range (-> message :ix inc) (count @log))
+                                           :let [next-message (@log ix)]
+                                           :when (task-kind (:contents next-message))]
+                                       next-message))
+                        next-message-time (if next-message
+                                            (str->date-time (:date-time next-message))
                                             @now)]
-                    {:start (str->date-time (:date-time message))
+                    {:kind kind
+                     :start (str->date-time (:date-time message))
                      :duration (minutes-between message-time next-message-time)
-                     :estimate (or (minutes-in (:contents message)) 0)})))))))
+                     :estimate (or (minutes-in (:contents message))
+                                   (condp = kind
+                                     :task 0
+                                     :break js/Infinity))})))))))
 
 (defn eval-code [code]
   (eval (empty-state)
@@ -108,7 +121,7 @@
                               (reset! editing (:ix message)))}
       (:contents message)])
    (when-let [task (@tasks (:ix message))]
-     [:span {:style {:margin-left "5px" :margin-right "5px"}} (:duration task) " / " (:estimate task) " mins"])
+     [:span {:style {:margin-left "5px" :margin-right "5px"}} (:duration task) " / " (if (= js/Infinity (:estimate task)) "-" (:estimate task)) " mins"])
    [:span {:style {:margin-left "5px" :margin-right "5px"}
            :on-mouse-enter #(reset! hovering (:ix message))
            :on-mouse-leave #(reset! hovering nil)
@@ -151,7 +164,7 @@
                                      :when task]
                                  task))]
      (when (> (:duration last-task) (:estimate last-task))
-       [nudge-ui (str "Last task is at " (:duration last-task) " / " (:estimate last-task) " mins! What are you up to?") "#task "]))))
+       [nudge-ui (str "Your last " (-> last-task :kind name) " is at " (:duration last-task) " / " (:estimate last-task) " mins! What are you up to?") "#task "]))))
 
 (defn console-ui []
   [:textarea#console {:rows 1
