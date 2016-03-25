@@ -19,7 +19,7 @@
      [:meta {:name "viewport"
              :content "width=device-width, initial-scale=1"}]
      (include-css "http://yegor256.github.io/tacit/tacit.min.css")]
-   [:body
+   [:body {:style "padding: 0"}
     mount-target
     (include-js "/js/app.js")]))
 

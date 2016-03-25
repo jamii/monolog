@@ -91,7 +91,7 @@
 
 (defn messages-ui []
   (into [:div {:style {:overflow-y "scroll"
-                       :height "200px"}}]
+                       :flex 1}}]
         (for [message (@views @current-view)
               :when message]
           [message-ui message])))
@@ -119,7 +119,10 @@
    [:button {:on-click #(reset! log [])} "clear log!"]])
 
 (defn page-ui []
-  [:div
+  [:div {:style {:height "100vh"
+                 :display "flex"
+                 :flex-direction "column"
+                 :padding "36px"}}
    [view-chooser-ui]
    [messages-ui]
    [console-ui]
