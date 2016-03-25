@@ -32,6 +32,31 @@
 
 (js/Notification.requestPermission)
 
+(defn minutes-between [start end]
+  (if (time/before? start end) ; interval blows up if end-points are not <
+    (time/in-minutes (time/interval start end))
+    0))
+
+(defn minutes-in [text]
+  (when-let [[_ mins] (re-find #"for (\d+) min" text)]
+    (let [mins (js/parseInt mins)]
+      (when-not (js/isNaN mins)
+        mins))))
+
+(def tasks
+  (make-reaction
+   (fn []
+     (into [] (for [message @log]
+                (when (.contains (:contents message) "#task")
+                  (let [message-time (str->date-time (:date-time message))
+                        next-message-ix (-> message :ix inc)
+                        next-message-time (if (> next-message-ix (count @log))
+                                            (str->date-time (:date-time (@log next-message-ix)))
+                                            @now)]
+                    {:start (str->date-time (:date-time message))
+                     :duration (minutes-between message-time next-message-time)
+                     :estimate (or (minutes-in (:contents message)) 0)})))))))
+
 (defn eval-code [code]
   (eval (empty-state)
         code
@@ -82,7 +107,8 @@
              :on-mouse-down (fn [event]
                               (reset! editing (:ix message)))}
       (:contents message)])
-   [:span {:style {:margin-left "5px" :margin-right "5px"}} (:reaction message)]
+   (when-let [task (@tasks (:ix message))]
+     [:span {:style {:margin-left "5px" :margin-right "5px"}} (:duration task) " / " (:estimate task) " mins"])
    [:span {:style {:margin-left "5px" :margin-right "5px"}
            :on-mouse-enter #(reset! hovering (:ix message))
            :on-mouse-leave #(reset! hovering nil)
@@ -95,13 +121,37 @@
   (with-meta message-ui-inner
     {:component-did-mount #(.scrollIntoView (r/dom-node %))}))
 
+(defn nudge [template]
+  (reset! console-contents template)
+  (.select (js/document.getElementById "console")))
+
+(defn nudge-ui-inner [text template]
+  [:div {:style {:font-weight "bold"
+                  :text-align "center"
+                  :flex 1}
+          :on-click #(nudge template)}
+   text])
+
+(def nudge-ui
+  (with-meta nudge-ui-inner
+    {:component-did-mount #(let [[_ text template] (-> % .-props .-argv)
+                                 notification (new js/Notification text
+                                                #js {:requireInteraction true})]
+                             (set! (.-onclick notification) (fn [] (nudge template))))}))
+
 (defn messages-ui []
-  (into [:div {:style {:overflow-y "scroll"
-                       :flex 1}}]
-        (for [message @log
-              :when (:contents message)
-              :when (not (:deleted message))]
-          [message-ui message])))
+  (conj
+   (into [:div {:style {:overflow-y "scroll"
+                        :flex 1}}]
+         (for [message @log
+               :when (:contents message)
+               :when (not (:deleted message))]
+           [message-ui message]))
+   (when-let [last-task (first (for [task (reverse @tasks)
+                                     :when task]
+                                 task))]
+     (when (> (:duration last-task) (:estimate last-task))
+       [nudge-ui (str "Last task is at " (:duration last-task) " / " (:estimate last-task) " mins! What are you up to?") "#task "]))))
 
 (defn console-ui []
   [:textarea#console {:rows 1
@@ -121,40 +171,12 @@
    [:h "Debug"]
    [:button {:on-click #(reset! log [])} "clear log!"]])
 
-(defn nudge [template]
-  (reset! console-contents template)
-  (.select (js/document.getElementById "console")))
-
-(defn nudge-ui-inner [text template]
-  [:span {:on-click #(nudge template)} text])
-
-(def nudge-ui
-  (with-meta nudge-ui-inner
-    {:component-did-mount #(let [[_ text template] (-> % .-props .-argv)
-                                 notification (new js/Notification text)]
-                             (set! (.-onclick notification) (fn [] (nudge template))))}))
-
-(defn nudges-ui []
-  (let [last-log (or (first (for [message (reverse @log)
-                                  :when (.contains (:contents message) "#log")]
-                              (str->date-time (:date-time message))))
-                     @now)
-        minutes-since-last-log (if (time/after? @now last-log) ; interval blows up if endpoints are equal
-                                 (time/in-minutes (time/interval last-log @now))
-                                 0)]
-    [:div
-     (when (> minutes-since-last-log 0)
-       [nudge-ui (str "Last #log was " minutes-since-last-log " minutes ago! What are you up to?") "#log "])]))
-
 (defn page-ui []
   [:div {:style {:height "100vh"
                  :width "100vw"
                  :display "flex"
                  :flex-direction "column"
                  :padding "36px"}}
-   [nudges-ui]
-   [:hr {:style {:margin-top "10px"
-                 :margin-bottom "10px"}}]
    [messages-ui]
    [console-ui]
    [debug-ui]])
