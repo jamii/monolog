@@ -92,19 +92,16 @@
                             (swap! log assoc-in [(:ix message) :contents] (-> event .-target .-value)))
                :on-key-down (fn [event]
                               (when (and (== (.-keyCode event) 13) (not (.-shiftKey event)))
-                                (do
-                                  (.preventDefault event)
-                                  (reset! editing nil)))
+                                (.preventDefault event)
+                                (reset! editing nil))
                               (when (== (.-keyCode event) 27)
-                                (do
-                                  (.preventDefault event)
-                                  (reset! editing nil)
-                                  (swap! log assoc-in [(:ix message) :contents] (:contents original-message)))))
+                                (.preventDefault event)
+                                (reset! editing nil)
+                                (swap! log assoc-in [(:ix message) :contents] (:contents original-message))))
                :on-blur (fn [event]
                           (when (and (== (.-keyCode event) 13) (not (.-shiftKey event)))
-                            (do
-                              (.preventDefault event)
-                              (reset! editing nil))))}])))
+                            (.preventDefault event)
+                            (reset! editing nil)))}])))
 
 (def editable-message-ui
   (with-meta editable-messsage-ui-inner
@@ -147,10 +144,10 @@
 
 (def nudge-ui
   (with-meta nudge-ui-inner
-    {:component-did-mount #(let [[_ text template] (-> % .-props .-argv)
-                                 notification (new js/Notification text
-                                                #js {:requireInteraction true})]
-                             (set! (.-onclick notification) (fn [] (nudge template))))}))
+    {:component-will-receive-props (fn [_ [_ text template]]
+                                     (let [notification (new js/Notification text
+                                                          #js {:requireInteraction true})]
+                                       (set! (.-onclick notification) (fn [] (nudge template)))))}))
 
 (defn messages-ui []
   (conj
