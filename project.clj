@@ -12,6 +12,7 @@
                  [reagent-utils "0.1.7"]
                  [ring "1.4.0"]
                  [ring/ring-defaults "0.1.5"]
+                 [fogus/ring-edn "0.3.0"]
                  [compojure "1.5.0"]
                  [hiccup "1.0.5"]
                  [environ "1.0.2"]
@@ -22,7 +23,10 @@
                   :exclusions [org.clojure/tools.reader]]
                  [alandipert/storage-atom "1.2.4"]
                  [org.clojure/tools.reader "1.0.0-alpha3"]
-                 [com.andrewmcveigh/cljs-time "0.4.0"]]
+                 [com.andrewmcveigh/cljs-time "0.4.0"]
+                 [com.github.joestelmach/natty "6568df387f"]]
+
+  :repositories [["jitpack" "https://jitpack.io"]]
 
   :plugins [[lein-environ "1.0.2"]
             [lein-cljsbuild "1.1.1"]
