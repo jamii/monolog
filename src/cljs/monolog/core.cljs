@@ -30,6 +30,8 @@
 (defonce editing (atom nil))
 (defonce hovering (atom nil))
 
+(defonce current-filter (atom :all))
+
 (js/Notification.requestPermission)
 
 (defn minutes-between [start end]
@@ -82,6 +84,19 @@
                                           :when (not (:deleted next-message))]
                                       next-message))]
                     (if done :done :todo))))))))
+
+(def filters
+  {:all #(do true)
+   :todo #(= :todo (@todos (:ix %)))})
+
+(defn filters-ui []
+  (into [:div]
+        (for [filter (keys filters)]
+          [:button {:on-click #(reset! current-filter filter)
+                    :style {:font-weight (if (= @current-filter filter)
+                                           "bold"
+                                           "normal")}}
+           (name filter)])))
 
 (defn eval-code [code]
   (eval (empty-state)
@@ -175,7 +190,8 @@
                         :flex 1}}]
          (for [message @log
                :when (:contents message)
-               :when (not (:deleted message))]
+               :when (not (:deleted message))
+               :when ((@current-filter filters) message)]
            [message-ui message]))
    (when-let [last-task (first (for [task (reverse @tasks)
                                      :when task]
@@ -207,6 +223,7 @@
                  :display "flex"
                  :flex-direction "column"
                  :padding "36px"}}
+   [filters-ui]
    [messages-ui]
    [console-ui]
    [debug-ui]])
