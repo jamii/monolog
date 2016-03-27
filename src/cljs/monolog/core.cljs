@@ -56,8 +56,9 @@
                 (when-let [kind (task-kind (:contents message))]
                   (let [message-time (str->date-time (:date-time message))
                         next-message (first (for [ix (range (-> message :ix inc) (count @log))
-                                           :let [next-message (@log ix)]
-                                           :when (task-kind (:contents next-message))]
+                                                  :let [next-message (@log ix)]
+                                                  :when (task-kind (:contents next-message))
+                                                  :when (not (:deleted next-message))]
                                        next-message))
                         next-message-time (if next-message
                                             (str->date-time (:date-time next-message))
@@ -69,6 +70,18 @@
                                    (condp = kind
                                      :task 0
                                      :break js/Infinity))})))))))
+
+(def todos
+  (make-reaction
+   (fn []
+     (into [] (for [message @log]
+                (when (.contains (:contents message) "#todo")
+                  (let [done (first (for [ix (range (-> message :ix inc) (count @log))
+                                          :let [next-message (@log ix)]
+                                          :when (.contains (:contents next-message) (str "#done " (:ix message)))
+                                          :when (not (:deleted next-message))]
+                                      next-message))]
+                    (if done :done :todo))))))))
 
 (defn eval-code [code]
   (eval (empty-state)
@@ -118,7 +131,14 @@
                               (reset! editing (:ix message)))}
       (:contents message)])
    (when-let [task (@tasks (:ix message))]
-     [:span {:style {:margin-left "5px" :margin-right "5px"}} (:duration task) " / " (if (= js/Infinity (:estimate task)) "-" (:estimate task)) " mins"])
+     [:span {:style {:margin-left "5px" :margin-right "5px"}}
+      (:duration task) " / " (if (= js/Infinity (:estimate task)) "-" (:estimate task)) " mins"])
+   (when (= :todo (@todos (:ix message)))
+     [:button {:style {:margin "0px 5px 0px 5px"
+                       :padding "0px 10px 0px 10px"}
+             :on-click #(log! {:username "jamii"
+                               :contents (str "#done " (:ix message))})}
+      "✓"])
    [:span {:style {:margin-left "5px" :margin-right "5px"}
            :on-mouse-enter #(reset! hovering (:ix message))
            :on-mouse-leave #(reset! hovering nil)
