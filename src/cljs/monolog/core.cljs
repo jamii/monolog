@@ -23,7 +23,7 @@
                                           :date-time (date-time->str (time/now)))))
 
 (def now (atom (time/now)))
-(defonce always-now (js/setInterval #(reset! now (time/now)) (* 1 1000)))
+(defonce always-now (js/setInterval #(reset! now (time/now)) (* 60 1000)))
 
 (defonce console-contents (atom ""))
 
@@ -148,6 +148,12 @@
    (when-let [task (@tasks (:ix message))]
      [:span {:style {:margin-left "5px" :margin-right "5px"}}
       (:duration task) " / " (if (= js/Infinity (:estimate task)) "-" (:estimate task)) " mins"])
+   (when (= :todo (@todos (:ix message)))
+     [:button {:style {:margin "0px 5px 0px 5px"
+                       :padding "0px 10px 0px 10px"}
+               :on-click #(log! {:username "jamii"
+                                 :contents (.replace (:contents message) "#todo" "#task")})}
+      "↻"])
    (when (= :todo (@todos (:ix message)))
      [:button {:style {:margin "0px 5px 0px 5px"
                        :padding "0px 10px 0px 10px"}
