@@ -10,6 +10,8 @@
             [goog.structs :as structs]
             [goog.net.XhrIo :as xhrio]))
 
+(js/Notification.requestPermission)
+
 (def log (local-storage (atom []) :log))
 
 (defn log! [entry]
@@ -27,19 +29,19 @@
 
 (defonce current-filter (atom :all))
 
-(js/Notification.requestPermission)
-
 (defonce natty (atom {}))
 
-(add-watch log :natty
-           (fn [_ _ _ messages]
-             (doseq [message messages
-                     :when (nil? (@natty (:contents message)))]
-               (xhrio/send "/natty"
-                           #(swap! natty assoc (:contents message) (read-string (-> % .-target .getResponseText)))
-                           "POST"
-                           (pr-str {:message message})
-                           (structs/Map. #js {:Content-Type "application/edn"})))))
+(defn update-natty [messages]
+  (doseq [message messages
+          :when (nil? (@natty message))]
+    (xhrio/send "/natty"
+                #(swap! natty assoc message (read-string (-> % .-target .getResponseText)))
+                "POST"
+                (pr-str {:message message})
+                (structs/Map. #js {:Content-Type "application/edn"}))))
+
+(add-watch log :natty (fn [_ _ _ messages] (update-natty messages)))
+(update-natty @log)
 
 (defn task-kind [contents]
   (cond
@@ -65,11 +67,11 @@
                                    (:time next-message)
                                    now)
                              duration (Math.floor (/ (- end start) 1000 60))
-                             estimated-end (or (apply max (flatten (@natty (:contents message))))
-                                               (condp = kind
-                                                 :task 0
-                                                 :break js/Infinity))
-                             estimate (Math.floor (/ (- estimated-end start) 1000 60))]
+                             estimate (if-let [estimated-end (apply max (flatten (@natty message)))]
+                                        (Math.floor (/ (- estimated-end start) 1000 60))
+                                        (condp = kind
+                                          :task 0
+                                          :break js/Infinity))]
                         {:kind kind
                          :start start
                          :end end
