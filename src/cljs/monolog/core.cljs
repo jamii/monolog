@@ -5,10 +5,13 @@
             [reagent.session :as session]
             [secretary.core :as secretary :include-macros true]
             [accountant.core :as accountant]
-            [cljs.tools.reader :refer [read-string]]
+            [cljs.reader :refer [read-string]]
             [cljs.js :refer [empty-state eval js-eval]]
             [cljs-time.core :as time]
-            cljs-time.format))
+            cljs-time.format
+            cljs-time.coerce
+            [goog.structs :as structs]
+            [goog.net.XhrIo :as xhrio]))
 
 (defn date-time->str [date-time]
   (cljs-time.format/unparse (cljs-time.format/formatter "YYYY-MM-dd HH:mm:ss") date-time))
@@ -18,9 +21,25 @@
 
 (def log (local-storage (atom []) :log))
 
-(defn log! [entry] (swap! log conj (assoc entry
-                                          :ix (count @log)
-                                          :date-time (date-time->str (time/now)))))
+(defn log! [entry]
+  (let [now (time/now)]
+    (swap! log conj (assoc entry
+                   :ix (count @log)
+                   :date-time (date-time->str now)
+                   :time (cljs-time.coerce/to-date now)
+                   :natty nil))))
+
+(defn natty [message]
+  (xhrio/send "/natty"
+              #(swap! log assoc-in [(:ix message) :natty] (read-string (-> % .-target .getResponseText)))
+              "POST"
+              (pr-str {:message message})
+              (structs/Map. #js {:Content-Type "application/edn"})))
+
+(add-watch log :natty (fn [_ _ _ messages]
+                        (doseq [message messages]
+                          (when (nil? (:natty message))
+                            (natty message)))))
 
 (def now (atom (time/now)))
 (defonce always-now (js/setInterval #(reset! now (time/now)) (* 60 1000)))
@@ -55,35 +74,37 @@
   (make-reaction
    (fn []
      (into [] (for [message @log]
-                (when-let [kind (task-kind (:contents message))]
-                  (let [message-time (str->date-time (:date-time message))
-                        next-message (first (for [ix (range (-> message :ix inc) (count @log))
-                                                  :let [next-message (@log ix)]
-                                                  :when (task-kind (:contents next-message))
-                                                  :when (not (:deleted next-message))]
-                                       next-message))
-                        next-message-time (if next-message
-                                            (str->date-time (:date-time next-message))
-                                            @now)]
-                    {:kind kind
-                     :start (str->date-time (:date-time message))
-                     :duration (minutes-between message-time next-message-time)
-                     :estimate (or (minutes-in (:contents message))
-                                   (condp = kind
-                                     :task 0
-                                     :break js/Infinity))})))))))
+                (when-not (:deleted message)
+                  (when-let [kind (task-kind (:contents message))]
+                    (let [message-time (str->date-time (:date-time message))
+                          next-message (first (for [ix (range (-> message :ix inc) (count @log))
+                                                    :let [next-message (@log ix)]
+                                                    :when (task-kind (:contents next-message))
+                                                    :when (not (:deleted next-message))]
+                                                next-message))
+                          next-message-time (if next-message
+                                              (str->date-time (:date-time next-message))
+                                              @now)]
+                      {:kind kind
+                       :start (str->date-time (:date-time message))
+                       :duration (minutes-between message-time next-message-time)
+                       :estimate (or (minutes-in (:contents message))
+                                     (condp = kind
+                                       :task 0
+                                       :break js/Infinity))}))))))))
 
 (def todos
   (make-reaction
    (fn []
      (into [] (for [message @log]
-                (when (.contains (:contents message) "#todo")
-                  (let [done (first (for [ix (range (-> message :ix inc) (count @log))
-                                          :let [next-message (@log ix)]
-                                          :when (.contains (:contents next-message) (str "#done " (:ix message)))
-                                          :when (not (:deleted next-message))]
-                                      next-message))]
-                    (if done :done :todo))))))))
+                (when-not (:deleted message)
+                  (when (.contains (:contents message) "#todo")
+                    (let [done (first (for [ix (range (-> message :ix inc) (count @log))
+                                            :let [next-message (@log ix)]
+                                            :when (.contains (:contents next-message) (str "#done " (:ix message)))
+                                            :when (not (:deleted next-message))]
+                                        next-message))]
+                      (if done :done :todo)))))))))
 
 (def filters
   {:all #(do true)

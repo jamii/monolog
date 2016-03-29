@@ -24,18 +24,16 @@
     mount-target
     (include-js "/js/app.js")]))
 
-(defn parse-dates [messages]
+(defn natty [message]
   {:status 200
    :headers {"Content-Type" "application/edn"}
-   :body [(into []
-               (for [message messages
-                     group (.parse (new Parser) (:contents message) (:date-time message))]
-                 (into [] (.getDates group))))]})
+   :body [(into [] (for [group (.parse (new Parser) (:contents message) (:time message))]
+                     (into [] (.getDates group))))]})
 
 (defroutes routes
   (GET "/" [] loading-page)
   (GET "/about" [] loading-page)
-  (POST "/parse-dates" [messages] (parse-dates messages))
+  (POST "/natty" [message] (natty message))
 
   (resources "/")
   (not-found "Not Found"))

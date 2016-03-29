@@ -78,7 +78,7 @@
 
 
                    :source-paths ["env/dev/clj"]
-                   :plugins [[lein-figwheel "0.5.0-6"
+                   :plugins [[lein-figwheel "0.5.2"
                               :exclusions [org.clojure/core.memoize
                                            ring/ring-core
                                            org.clojure/clojure
