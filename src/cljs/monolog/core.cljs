@@ -26,10 +26,23 @@
 
 (defonce editing (atom nil))
 (defonce hovering (atom nil))
+(defonce highlighting (atom [-1 nil]))
 
 (defonce current-filter (atom :all))
 
 (defonce natty (atom {}))
+
+(defn contains [string substring]
+  (not= -1 (.indexOf string substring)))
+
+(defn re-spans [re string]
+  (let [re (js/RegExp. (.-source re) "g")]
+    (loop [spans []]
+      (if-let [match (.exec re string)]
+        (recur (conj spans {:start (.-index match)
+                            :end (+ (.-index match) (count (aget match 0)))
+                            :match match}))
+        spans))))
 
 (defn update-natty [messages]
   (doseq [message messages
@@ -45,8 +58,8 @@
 
 (defn task-kind [contents]
   (cond
-    (.contains contents "#task") :task
-    (.contains contents "#break") :break
+    (contains contents "#task") :task
+    (contains contents "#break") :break
     true nil))
 
 (def tasks
@@ -83,10 +96,10 @@
    (fn []
      (into [] (for [message @log]
                 (when-not (:deleted message)
-                  (when (.contains (:contents message) "#todo")
+                  (when (contains (:contents message) "#todo")
                     (let [done (first (for [ix (range (-> message :ix inc) (count @log))
                                             :let [next-message (@log ix)]
-                                            :when (.contains (:contents next-message) (str "#done " (:ix message)))
+                                            :when (contains (:contents next-message) (str "#done #" (:ix message)))
                                             :when (not (:deleted next-message))]
                                         next-message))]
                       (if done :done :todo)))))))))
@@ -141,28 +154,45 @@
   (with-meta editable-messsage-ui-inner
     {:component-did-mount #(.select (r/dom-node %))}))
 
-(defn parsed-message [natty contents pos]
-  (if (empty? natty)
+(defn parsed-message [parsed contents pos]
+  (if (empty? parsed)
     [[:span (.substring contents pos)]]
-    (let [group (first natty)
-          start (:column group)
-          end (+ start (count (:text group)))]
-      (cons [:span (.substring contents pos start)]
-            (cons
-             [:span {:style {:color "green"}
-                     :title (.toString (apply max (:times group)))}
-              (.substring contents start end)]
-             (parsed-message (rest natty) contents end))))))
+    (let [section (first parsed)]
+      (if (>= (:start section) pos)
+        (cons [:span (.substring contents pos (:start section))]
+              (cons
+               [:span (:props section)
+                (.substring contents (:start section) (:end section))]
+               (parsed-message (rest parsed) contents (:end section))))
+        (do
+          (prn "ignoring" section)
+          (parsed-message (rest parsed) contents pos))))))
 
 (defn fixed-message-ui [message]
-  (into [:span {:style {:flex "1" :margin-left "5px" :margin-right "5px"}
-          :on-mouse-down (fn [event]
-                           (reset! editing (:ix message)))}]
-   (parsed-message (@natty message) (:contents message) 0)))
+  (let [parsed (concat
+                 (for [span (re-spans #"#(\d+)" (:contents message))
+                       :let [ix (js/parseInt (aget (:match span) 1))]
+                       :when (not (js/isNaN ix))]
+                   (assoc span :props
+                          {:style {:color "blue"}
+                           :title (.toString (get-in @log [ix :contents]))
+                           :on-mouse-down (fn [event]
+                                            (.stopPropagation event)
+                                            (.scrollIntoView (js/document.getElementById (str "message-" ix))))}))
+                 (for [group (@natty message)]
+                   {:start (:start group)
+                    :end (:end group)
+                    :props {:style {:color "green"}
+                            :title (.toString (apply max (:times group)))}}))]
+    (into [:span {:style {:flex "1" :margin-left "5px" :margin-right "5px"}
+                  :on-mouse-down (fn [event]
+                                   (reset! editing (:ix message)))}]
+          (parsed-message (sort-by :start parsed) (:contents message) 0))))
 
 (defn message-ui-inner [message]
   ^{:key (str "message-" (:ix message))}
-  [:div {:style {:width "100%"
+  [:div {:id (str "message-" (:ix message))
+         :style {:width "100%"
                  :display "flex"}}
    (if (= @editing (:ix message))
      [editable-message-ui message]
@@ -180,7 +210,7 @@
      [:button {:style {:margin "0px 5px 0px 5px"
                        :padding "0px 10px 0px 10px"}
              :on-click #(log! {:username "jamii"
-                               :contents (str "#done " (:ix message))})}
+                               :contents (str "#done #" (:ix message))})}
       "✓"])
    [:span {:style {:margin-left "5px" :margin-right "5px"}
            :on-mouse-enter #(reset! hovering (:ix message))

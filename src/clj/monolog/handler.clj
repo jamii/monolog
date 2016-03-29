@@ -29,8 +29,8 @@
    :headers {"Content-Type" "application/edn"}
    :body [(into [] (for [group (.parse (new Parser) (:contents message) (:time message))]
                      {:times (into [] (.getDates group))
-                      :column (- (.getPosition group) 1) ;; 1-indexed?
-                      :text (.getText group)}))]})
+                      :start (- (.getPosition group) 1) ;; 1-indexed?
+                      :end (+ (count (.getText group)) (- (.getPosition group) 1))}))]})
 
 (defroutes routes
   (GET "/" [] loading-page)
