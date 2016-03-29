@@ -67,7 +67,7 @@
                                    (:time next-message)
                                    now)
                              duration (Math.floor (/ (- end start) 1000 60))
-                             estimate (if-let [estimated-end (apply max (flatten (@natty message)))]
+                             estimate (if-let [estimated-end (apply max (flatten (for [group (@natty message)] (:times group))))]
                                         (Math.floor (/ (- estimated-end start) 1000 60))
                                         (condp = kind
                                           :task 0
@@ -141,16 +141,32 @@
   (with-meta editable-messsage-ui-inner
     {:component-did-mount #(.select (r/dom-node %))}))
 
+(defn parsed-message [natty contents pos]
+  (if (empty? natty)
+    [[:span (.substring contents pos)]]
+    (let [group (first natty)
+          start (:column group)
+          end (+ start (count (:text group)))]
+      (cons [:span (.substring contents pos start)]
+            (cons
+             [:span {:style {:color "green"}
+                     :title (.toString (apply max (:times group)))}
+              (.substring contents start end)]
+             (parsed-message (rest natty) contents end))))))
+
+(defn fixed-message-ui [message]
+  (into [:span {:style {:flex "1" :margin-left "5px" :margin-right "5px"}
+          :on-mouse-down (fn [event]
+                           (reset! editing (:ix message)))}]
+   (parsed-message (@natty message) (:contents message) 0)))
+
 (defn message-ui-inner [message]
   ^{:key (str "message-" (:ix message))}
   [:div {:style {:width "100%"
                  :display "flex"}}
    (if (= @editing (:ix message))
      [editable-message-ui message]
-     [:span {:style {:flex "1" :margin-left "5px" :margin-right "5px"}
-             :on-mouse-down (fn [event]
-                              (reset! editing (:ix message)))}
-      (:contents message)])
+     [fixed-message-ui message])
    (when-let [task (@tasks (:ix message))]
      [:span {:style {:margin-left "5px" :margin-right "5px"}}
       (:duration task) " / " (if (= js/Infinity (:estimate task)) "-" (:estimate task)) " mins"])
