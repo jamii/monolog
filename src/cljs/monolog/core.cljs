@@ -104,6 +104,26 @@
                                         next-message))]
                       (if done :done :todo)))))))))
 
+(defn rating [tag contents]
+  (cond
+    (contains contents (str tag "++")) 2
+    (contains contents (str tag "+")) 1
+    (contains contents (str tag "-")) -1
+    (contains contents (str tag "--")) -2))
+
+(def samples
+  (make-reaction
+   (fn []
+     (into [] (for [message @log]
+                (when-not (:deleted message)
+                  (when (contains (:contents message) "#sample")
+                    (let [next-sample (apply max (flatten (for [group (@natty message)] (:times group))))]
+                      {:time (:time message)
+                       :next-sample next-sample
+                       :heart (rating "heart" (:contents message))
+                       :mind (rating "mind" (:contents message))
+                       :body (rating "body" (:contents message))}))))))))
+
 (def filters
   {:all #(do true)
    :todo #(= :todo (@todos (:ix %)))})
@@ -255,7 +275,12 @@
                                      :when task]
                                  task))]
      (when (> (:duration last-task) (:estimate last-task))
-       [nudge-ui (str "Your last " (-> last-task :kind name) " is at " (:duration last-task) " / " (:estimate last-task) " mins! What are you up to?") "#task "]))))
+       [nudge-ui (str "Your last " (-> last-task :kind name) " is at " (:duration last-task) " / " (:estimate last-task) " mins! What are you up to?") "#task "]))
+   (let [last-sample (first (for [sample (reverse @samples)
+                                  :when sample]
+                              sample))]
+     (when (or (nil? last-sample) (> @now (:next-sample last-sample)))
+       [nudge-ui (str "It's sampling time!") (str "#sample heart mind body (next sample at " (js/Date. (+ (.getTime @now) (* (js/Math.random) 1000 60 60 8))) ")")]))))
 
 (defn console-ui []
   [:textarea#console {:rows 1
