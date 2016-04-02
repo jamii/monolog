@@ -8,7 +8,9 @@
             [cljs.reader :refer [read-string]]
             [cljs.js :refer [empty-state eval js-eval]]
             [goog.structs :as structs]
-            [goog.net.XhrIo :as xhrio]))
+            [goog.net.XhrIo :as xhrio]
+            [goog.string :refer [format]]
+            goog.string.format))
 
 (js/Notification.requestPermission)
 
@@ -34,6 +36,15 @@
 
 (defn contains [string substring]
   (not= -1 (.indexOf string substring)))
+
+(defn time->string [time]
+  (format "%04d-%02d-%02d %02d:%02d:%02d"
+          (.getFullYear time)
+          (.getMonth time)
+          (.getDate time)
+          (.getHours time)
+          (.getMinutes time)
+          (.getSeconds time)))
 
 (defn re-spans [re string]
   (let [re (js/RegExp. (.-source re) "g")]
@@ -195,7 +206,7 @@
                        :when (not (js/isNaN ix))]
                    (assoc span :props
                           {:style {:color "blue"}
-                           :title (.toString (get-in @log [ix :contents]))
+                           :title (get-in @log [ix :contents])
                            :on-mouse-down (fn [event]
                                             (.stopPropagation event)
                                             (.scrollIntoView (js/document.getElementById (str "message-" ix))))}))
@@ -203,7 +214,7 @@
                    {:start (:start group)
                     :end (:end group)
                     :props {:style {:color "green"}
-                            :title (.toString (apply max (:times group)))}}))]
+                            :title (time->string (apply max (:times group)))}}))]
     (into [:span {:style {:flex "1" :margin-left "5px" :margin-right "5px"}
                   :on-mouse-down (fn [event]
                                    (reset! editing (:ix message)))}]
@@ -238,7 +249,7 @@
            :on-click #(swap! log assoc-in [(:ix message) :deleted] true)}
     (if (= @hovering (:ix message)) "X" "#")
     (:ix message)]
-   [:span {:style {:margin-left "5px" :margin-right "5px"}} (.toString (:time message))]])
+   [:span {:style {:margin-left "5px" :margin-right "5px"}} (time->string (:time message))]])
 
 (def message-ui
   (with-meta message-ui-inner
