@@ -22,7 +22,7 @@
                    :time (js/Date.))))
 
 (def now (atom (js/Date.)))
-(defonce always-now (js/setInterval #(reset! now (js/Date.)) (* 60 1000)))
+(defonce always-now (js/setInterval #(reset! now (js/Date.)) (* 10 1000)))
 
 (defonce console-contents (atom ""))
 
@@ -38,9 +38,9 @@
   (not= -1 (.indexOf string substring)))
 
 (defn time->string [time]
-  (format "%04d-%02d-%02d %02d:%02d:%02d"
+  (format "%04d/%02d/%02d %02d:%02d:%02d"
           (.getFullYear time)
-          (.getMonth time)
+          (inc (.getMonth time))
           (.getDate time)
           (.getHours time)
           (.getMinutes time)
@@ -271,7 +271,8 @@
     {:component-will-receive-props (fn [_ [_ text template]]
                                      (let [notification (new js/Notification text
                                                           #js {:requireInteraction true})]
-                                       (set! (.-onclick notification) (fn [] (nudge template)))))}))
+                                       (set! (.-onclick notification) (fn [] (nudge template)))))
+     :component-did-mount #(.scrollIntoView (r/dom-node %))}))
 
 (defn messages-ui []
   (conj
@@ -291,7 +292,7 @@
                                   :when sample]
                               sample))]
      (when (or (nil? last-sample) (> @now (:next-sample last-sample)))
-       [nudge-ui (str "It's sampling time!") (str "#sample heart mind body (next sample at " (js/Date. (+ (.getTime @now) (* (js/Math.random) 1000 60 60 8))) ")")]))))
+       [nudge-ui (str "It's sampling time!") (str "#sample heart mind body (next sample " (time->string (js/Date. (+ (.getTime @now) (* (js/Math.random) 1000 60 60 8)))) ")")]))))
 
 (defn console-ui []
   [:textarea#console {:rows 1
