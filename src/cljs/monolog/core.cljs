@@ -291,7 +291,7 @@
    (let [last-sample (first (for [sample (reverse @samples)
                                   :when sample]
                               sample))]
-     (when (or (nil? last-sample) (> @now (:next-sample last-sample)))
+     (when false ; (or (nil? last-sample) (> @now (:next-sample last-sample)))
        [nudge-ui (str "It's sampling time!") (str "#sample heart mind body (next sample " (time->string (js/Date. (+ (.getTime @now) (* (js/Math.random) 1000 60 60 8)))) ")")]))))
 
 (defn console-ui []
