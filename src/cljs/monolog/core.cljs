@@ -157,25 +157,25 @@
         (fn [result] result)))
 
 (defn editable-messsage-ui-inner [message]
-  (let [original-message message]
-    (fn [message]
+  (let [contents (atom (:contents message))]
+    (fn [_]
       [:input {:type "text"
                :style {:flex "1"
                        :margin-left "5px"
                        :margin-right "5px"
                        :margin-bottom "0px"
                        :padding "0"}
-               :value (:contents message)
+               :value @contents
                :on-change (fn [event]
-                            (swap! log assoc-in [(:ix message) :contents] (-> event .-target .-value)))
+                            (reset! contents (-> event .-target .-value)))
                :on-key-down (fn [event]
                               (when (and (== (.-keyCode event) 13) (not (.-shiftKey event)))
                                 (.preventDefault event)
-                                (reset! editing nil))
+                                (reset! editing nil)
+                                (swap! log assoc-in [(:ix message) :contents] @contents))
                               (when (== (.-keyCode event) 27)
                                 (.preventDefault event)
-                                (reset! editing nil)
-                                (swap! log assoc-in [(:ix message) :contents] (:contents original-message))))
+                                (reset! editing nil)))
                :on-blur (fn [event]
                           (when (and (== (.-keyCode event) 13) (not (.-shiftKey event)))
                             (.preventDefault event)
