@@ -135,9 +135,20 @@
                        :mind (rating "mind" (:contents message))
                        :body (rating "body" (:contents message))}))))))))
 
+(def lb-minutes
+  (make-reaction
+   (fn []
+     (reduce (fn [acc message]
+               (if (contains (:contents message) "#lb")
+                 (+ acc (:duration (@tasks (:ix message))))
+                 acc))
+             0
+             @log))))
+
 (def filters
   {:all #(do true)
-   :todo #(= :todo (@todos (:ix %)))})
+   :todo #(= :todo (@todos (:ix %)))
+   :lb #(contains (:contents %) "#lb")})
 
 (defn filters-ui []
   (into [:div]
@@ -283,6 +294,11 @@
                :when (not (:deleted message))
                :when ((@current-filter filters) message)]
            [message-ui message]))
+   (when (= :lb @current-filter)
+     [:div {:style {:font-weight "bold"
+                     :text-align "center"
+                     :flex 1}}
+      (format "%.0f hours" (/ @lb-minutes 60))])
    (when-let [last-task (first (for [task (reverse @tasks)
                                      :when task]
                                  task))]
