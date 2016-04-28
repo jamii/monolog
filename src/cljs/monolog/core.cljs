@@ -298,7 +298,7 @@
      [:div {:style {:font-weight "bold"
                      :text-align "center"
                      :flex 1}}
-      (format "%.0f hours" (/ @lb-minutes 60))])
+      (format "%.0f hours - £%.2f" (/ @lb-minutes 60) (* (/ @lb-minutes 60 7) 400))])
    (when-let [last-task (first (for [task (reverse @tasks)
                                      :when task]
                                  task))]
