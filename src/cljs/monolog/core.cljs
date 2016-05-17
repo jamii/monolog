@@ -22,7 +22,7 @@
                    :time (js/Date.))))
 
 (def now (atom (js/Date.)))
-(defonce always-now (js/setInterval #(reset! now (js/Date.)) (* 10 1000)))
+(defonce always-now (js/setInterval #(reset! now (js/Date.)) (* 60 1000)))
 
 (defonce console-contents (atom ""))
 
@@ -228,15 +228,50 @@
                             :title (time->string (apply max (:times group)))}}))]
     (into [:span {:style {:flex "1" :margin-left "5px" :margin-right "5px"}
                   :on-mouse-down (fn [event]
-                                   (reset! editing (:ix message)))}]
+                                   (reset! editing [:contents (:ix message)]))}]
           (parsed-message (sort-by :start parsed) (:contents message) 0))))
+
+(defn editable-time-ui-inner [message]
+  (let [contents (atom (pr-str (:time message)))]
+    (fn [_]
+      [:input {:type "text"
+               :style {:flex 1
+                       :margin-left "5px"
+                       :margin-right "5px"
+                       :margin-bottom "0px"
+                       :padding "0"}
+               :value @contents
+               :on-change (fn [event]
+                            (reset! contents (-> event .-target .-value)))
+               :on-key-down (fn [event]
+                              (when (and (== (.-keyCode event) 13) (not (.-shiftKey event)))
+                                (.preventDefault event)
+                                (reset! editing nil)
+                                (swap! log assoc-in [(:ix message) :time] (read-string @contents)))
+                              (when (== (.-keyCode event) 27)
+                                (.preventDefault event)
+                                (reset! editing nil)))
+               :on-blur (fn [event]
+                          (when (and (== (.-keyCode event) 13) (not (.-shiftKey event)))
+                            (.preventDefault event)
+                            (reset! editing nil)))}])))
+
+(def editable-time-ui
+  (with-meta editable-time-ui-inner
+    {:component-did-mount #(.select (r/dom-node %))}))
+
+(defn fixed-time-ui [message]
+  [:span {:style {:margin-left "5px" :margin-right "5px"}
+          :on-mouse-down (fn [event]
+                           (reset! editing [:time (:ix message)]))} 
+   (time->string (:time message))])
 
 (defn message-ui-inner [message]
   ^{:key (str "message-" (:ix message))}
   [:div {:id (str "message-" (:ix message))
          :style {:width "100%"
                  :display "flex"}}
-   (if (= @editing (:ix message))
+   (if (= @editing [:contents (:ix message)])
      [editable-message-ui message]
      [fixed-message-ui message])
    (when-let [task (@tasks (:ix message))]
@@ -260,7 +295,9 @@
            :on-click #(swap! log assoc-in [(:ix message) :deleted] true)}
     (if (= @hovering (:ix message)) "X" "#")
     (:ix message)]
-   [:span {:style {:margin-left "5px" :margin-right "5px"}} (time->string (:time message))]])
+   (if (= @editing [:time (:ix message)])
+     [editable-time-ui message]
+     [fixed-time-ui message])])
 
 (def message-ui
   (with-meta message-ui-inner
@@ -298,7 +335,7 @@
      [:div {:style {:font-weight "bold"
                      :text-align "center"
                      :flex 1}}
-      (format "%.0f hours - £%.2f" (/ @lb-minutes 60) (* (/ @lb-minutes 60 7) 400))])
+      (format "%.0f hours - £%.2f" (/ @lb-minutes 60) (* (/ @lb-minutes 60 6) 400))])
    (when-let [last-task (first (for [task (reverse @tasks)
                                      :when task]
                                  task))]
